@@ -73,8 +73,8 @@ func HandleToggleTodo(w http.ResponseWriter, r *http.Request) {
 
 	AddHeader(w)
 	store.Todos[i].Completed = !store.Todos[i].Completed
-	newerr := json.NewEncoder(w).Encode(store.Todos[i])
-	if newerr != nil {
+	err = json.NewEncoder(w).Encode(store.Todos[i])
+	if err != nil {
 		http.Error(w, "failed to toggle todo", http.StatusInternalServerError)
 		return
 	}
@@ -123,5 +123,4 @@ func HandleCreateTodo(w http.ResponseWriter, request *http.Request) {
 		http.Error(w, "failed to encode respone", http.StatusInternalServerError)
 		return
 	}
-
 }
