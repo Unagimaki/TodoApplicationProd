@@ -1,0 +1,133 @@
+package todo
+
+import (
+	"database/sql"
+	"fmt"
+)
+
+type Repository struct {
+	db *sql.DB
+}
+
+func NewRepo(db *sql.DB) *Repository {
+	return &Repository{
+		db: db,
+	}
+}
+
+func (r *Repository) CreateTodo(title string) (Todo, error) {
+
+	query := `
+		INSERT INTO todos (title)
+		VALUES ($1)
+		RETURNING id, title, completed
+	`
+
+	var todo Todo
+
+	err := r.db.QueryRow(query, title).Scan(
+		&todo.ID,
+		&todo.Title,
+		&todo.Completed,
+	)
+	if err != nil {
+		return Todo{}, fmt.Errorf("repository create todo: %w", err)
+	}
+	return todo, nil
+
+}
+
+func (r *Repository) GetAllTodos() ([]Todo, error) {
+	todos := []Todo{}
+
+	query := `
+		SELECT id, title, completed
+		FROM todos
+		ORDER BY id
+	`
+
+	rows, err := r.db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var todo Todo
+		err := rows.Scan(
+			&todo.ID,
+			&todo.Title,
+			&todo.Completed,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		todos = append(todos, todo)
+	}
+
+	err = rows.Err()
+	if err != nil {
+		return nil, err
+	}
+	return todos, nil
+}
+
+func (r *Repository) DeleteTodo(id int) error {
+	query := `
+		DELETE FROM todos
+		WHERE id = $1
+	`
+	result, err := r.db.Exec(query, id)
+	if err != nil {
+		return fmt.Errorf("repository database error: %w", err)
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("repository delete todo rows affected: %w", err)
+	}
+	if rowsAffected == 0 {
+		return fmt.Errorf("repository delete todo: no todo found with id %d", id)
+	}
+
+	return nil
+}
+
+func (r *Repository) UpdateTodoTitle(id int, title string) (Todo, error) {
+	query := `
+		UPDATE todos
+		SET title = $1
+		WHERE id = $2
+		RETURNING id, title, completed
+	`
+
+	var todo Todo
+
+	err := r.db.QueryRow(query, title, id).Scan(
+		&todo.ID,
+		&todo.Title,
+		&todo.Completed,
+	)
+	if err != nil {
+		return Todo{}, fmt.Errorf("repository update todo title: %w", err)
+	}
+	return todo, nil
+}
+func (r *Repository) ToggleTodo(id int) (Todo, error) {
+	query := `
+		UPDATE todos
+		SET completed = NOT completed
+		WHERE id = $1
+		RETURNING id, title, completed
+	`
+	var todo Todo
+	err := r.db.QueryRow(query, id).Scan(
+		&todo.ID,
+		&todo.Title,
+		&todo.Completed,
+	)
+	if err != nil {
+		return Todo{}, fmt.Errorf("repository update todo status: %w", err)
+	}
+	return todo, nil
+}
