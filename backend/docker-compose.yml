@@ -10,6 +10,16 @@ services:
       - "5432:5432"
     volumes:
       - todo_postgres_data:/var/lib/postgresql/data
-
+  migrate:
+    image: migrate/migrate
+    volumes:
+      - ./migrations:/migrations
+    depends_on:
+      - postgres
+    entrypoint: 
+      - migrate
+      - -path=/migrations
+      - -database
+      - postgres://todo_user:todo_password@postgres:5432/todo_db?sslmode=disable
 volumes:
   todo_postgres_data:
