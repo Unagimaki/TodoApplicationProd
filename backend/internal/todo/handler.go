@@ -22,6 +22,9 @@ type UpdateTitleTodoRequest struct {
 type GetAllTodosResponse struct {
 	Todos []Todo `json:"todos"`
 }
+type ErrorResponse struct {
+	Error string `json:"error"`
+}
 
 func NewHandler(service *Service) *Handler {
 	return &Handler{
@@ -34,25 +37,40 @@ func handleError(w http.ResponseWriter, err error) {
 		log.Println("request canseled by client")
 	case errors.Is(err, context.DeadlineExceeded):
 		log.Println("request deadline exceeded")
-		http.Error(w, "request timeout", http.StatusGatewayTimeout)
+		writeJSONError(w, "request timeout", http.StatusGatewayTimeout)
 	case errors.Is(err, ErrInvalidID):
-		http.Error(w, "invalid id", http.StatusBadRequest)
+		writeJSONError(w, "invalid id", http.StatusBadRequest)
 	case errors.Is(err, ErrTitleRequired):
-		http.Error(w, "title is required", http.StatusBadRequest)
+		writeJSONError(w, "title is required", http.StatusBadRequest)
 	case errors.Is(err, ErrTodoNotFound):
-		http.Error(w, "todo not found", http.StatusNotFound)
+		writeJSONError(w, "todo not found", http.StatusNotFound)
 	default:
 		log.Println(err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		writeJSONError(w, "internal server error", http.StatusInternalServerError)
 	}
 }
-
+func writeJSONError(w http.ResponseWriter, message string, statusCode int) {
+	response := ErrorResponse{
+		Error: message,
+	}
+	responseJSON, err := json.Marshal(response)
+	if err != nil {
+		log.Println("failed to marshal error response", err)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"error":"internal server error"}`))
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	w.Write(responseJSON)
+}
 func (h *Handler) CreateTodo(w http.ResponseWriter, r *http.Request) {
 	var req CreateTodoRequest
 	ctx := r.Context()
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
-		http.Error(w, "invalid request body: "+err.Error(), http.StatusBadRequest)
+		writeJSONError(w, "invalid request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -64,7 +82,7 @@ func (h *Handler) CreateTodo(w http.ResponseWriter, r *http.Request) {
 
 	response, err := json.Marshal(todo)
 	if err != nil {
-		http.Error(w, "failed to encode response", http.StatusInternalServerError)
+		writeJSONError(w, "failed to encode response", http.StatusInternalServerError)
 		return
 	}
 
@@ -74,7 +92,7 @@ func (h *Handler) CreateTodo(w http.ResponseWriter, r *http.Request) {
 }
 func (h *Handler) GetAllTodos(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		writeJSONError(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 	ctx := r.Context()
@@ -92,7 +110,7 @@ func (h *Handler) GetAllTodos(w http.ResponseWriter, r *http.Request) {
 	responseJSON, err := json.Marshal(response)
 	fmt.Println(responseJSON)
 	if err != nil {
-		http.Error(w, "failed to encode response", http.StatusInternalServerError)
+		writeJSONError(w, "failed to encode response", http.StatusInternalServerError)
 		return
 	}
 
@@ -105,7 +123,7 @@ func (h *Handler) DeleteTodo(w http.ResponseWriter, r *http.Request) {
 	idString := r.PathValue("id")
 	id, err := strconv.Atoi(idString)
 	if err != nil {
-		http.Error(w, "invalid todo id", http.StatusBadRequest)
+		writeJSONError(w, "invalid todo id", http.StatusBadRequest)
 		return
 	}
 	err = h.service.DeleteTodo(ctx, id)
@@ -120,13 +138,13 @@ func (h *Handler) UpdateTodoTitle(w http.ResponseWriter, r *http.Request) {
 	idString := r.PathValue("id")
 	id, err := strconv.Atoi(idString)
 	if err != nil {
-		http.Error(w, "invalid todo id", http.StatusBadRequest)
+		writeJSONError(w, "invalid todo id", http.StatusBadRequest)
 		return
 	}
 	var req UpdateTitleTodoRequest
 	err = json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
-		http.Error(w, "invalid request body: "+err.Error(), http.StatusBadRequest)
+		writeJSONError(w, "invalid request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 	todo, err := h.service.UpdateTodoTitle(ctx, id, req.Title)
@@ -137,7 +155,7 @@ func (h *Handler) UpdateTodoTitle(w http.ResponseWriter, r *http.Request) {
 	response, err := json.Marshal(todo)
 	if err != nil {
 		log.Println(err)
-		http.Error(w, "failed to encode response", http.StatusInternalServerError)
+		writeJSONError(w, "failed to encode response", http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -149,7 +167,7 @@ func (h *Handler) ToggleTodo(w http.ResponseWriter, r *http.Request) {
 	idString := r.PathValue("id")
 	id, err := strconv.Atoi(idString)
 	if err != nil {
-		http.Error(w, "invalit todo id", http.StatusBadRequest)
+		writeJSONError(w, "invalid todo id", http.StatusBadRequest)
 		return
 	}
 	todo, err := h.service.ToggleTodo(ctx, id)
@@ -160,7 +178,7 @@ func (h *Handler) ToggleTodo(w http.ResponseWriter, r *http.Request) {
 	response, err := json.Marshal(todo)
 	if err != nil {
 		log.Println(err)
-		http.Error(w, "failed to encode response", http.StatusInternalServerError)
+		writeJSONError(w, "failed to encode response", http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
