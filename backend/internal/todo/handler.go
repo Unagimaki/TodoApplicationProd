@@ -1,6 +1,7 @@
 package todo
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -29,6 +30,11 @@ func NewHandler(service *Service) *Handler {
 }
 func handleError(w http.ResponseWriter, err error) {
 	switch {
+	case errors.Is(err, context.Canceled):
+		log.Println("request canseled by client")
+	case errors.Is(err, context.DeadlineExceeded):
+		log.Println("request deadline exceeded")
+		http.Error(w, "request timeout", http.StatusGatewayTimeout)
 	case errors.Is(err, ErrInvalidID):
 		http.Error(w, "invalid id", http.StatusBadRequest)
 	case errors.Is(err, ErrTitleRequired):
@@ -43,14 +49,14 @@ func handleError(w http.ResponseWriter, err error) {
 
 func (h *Handler) CreateTodo(w http.ResponseWriter, r *http.Request) {
 	var req CreateTodoRequest
-
+	ctx := r.Context()
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		http.Error(w, "invalid request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	todo, err := h.service.CreateTodo(req.Title)
+	todo, err := h.service.CreateTodo(ctx, req.Title)
 	if err != nil {
 		handleError(w, err)
 		return
@@ -66,16 +72,16 @@ func (h *Handler) CreateTodo(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusCreated)
 	w.Write(response)
 }
-
 func (h *Handler) GetAllTodos(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	todos, err := h.service.GetAllTodos()
+	ctx := r.Context()
+	todos, err := h.service.GetAllTodos(ctx)
 
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		handleError(w, err)
 		return
 	}
 
@@ -95,21 +101,22 @@ func (h *Handler) GetAllTodos(w http.ResponseWriter, r *http.Request) {
 	w.Write(responseJSON)
 }
 func (h *Handler) DeleteTodo(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	idString := r.PathValue("id")
 	id, err := strconv.Atoi(idString)
 	if err != nil {
 		http.Error(w, "invalid todo id", http.StatusBadRequest)
 		return
 	}
-	err = h.service.DeleteTodo(id)
+	err = h.service.DeleteTodo(ctx, id)
 	if err != nil {
 		handleError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
-
 func (h *Handler) UpdateTodoTitle(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	idString := r.PathValue("id")
 	id, err := strconv.Atoi(idString)
 	if err != nil {
@@ -122,7 +129,7 @@ func (h *Handler) UpdateTodoTitle(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	todo, err := h.service.UpdateTodoTitle(id, req.Title)
+	todo, err := h.service.UpdateTodoTitle(ctx, id, req.Title)
 	if err != nil {
 		handleError(w, err)
 		return
@@ -137,15 +144,15 @@ func (h *Handler) UpdateTodoTitle(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	w.Write(response)
 }
-
 func (h *Handler) ToggleTodo(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	idString := r.PathValue("id")
 	id, err := strconv.Atoi(idString)
 	if err != nil {
 		http.Error(w, "invalit todo id", http.StatusBadRequest)
 		return
 	}
-	todo, err := h.service.ToggleTodo(id)
+	todo, err := h.service.ToggleTodo(ctx, id)
 	if err != nil {
 		handleError(w, err)
 		return

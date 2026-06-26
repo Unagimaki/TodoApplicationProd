@@ -1,13 +1,20 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"todo-app/internal/todo"
 
+	"os/signal"
+	"syscall"
+	"time"
+
 	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/joho/godotenv"
 )
 
 func HealthHandler(w http.ResponseWriter, r *http.Request) {
@@ -32,7 +39,14 @@ func corsMiddlewareWithLog(next http.Handler) http.Handler {
 }
 
 func main() {
-	db, err := sql.Open("pgx", "postgres://todo_user:todo_password@localhost:5432/todo_db?sslmode=disable")
+	err := godotenv.Load()
+	if err != nil {
+		log.Println("no .env file found")
+	}
+	databaseURL := os.Getenv("DATABASE_URL")
+	serverPort := os.Getenv("SERVER_PORT")
+	address := ":" + serverPort
+	db, err := sql.Open("pgx", databaseURL)
 
 	if err != nil {
 		log.Fatal(err)
@@ -60,10 +74,27 @@ func main() {
 	mux.HandleFunc("PATCH /todos/{id}", handler.UpdateTodoTitle)
 	mux.HandleFunc("PATCH /todos/{id}/toggle", handler.ToggleTodo)
 
-	fmt.Println("server started on :8080")
-	err = http.ListenAndServe(":8080", corsMiddlewareWithLog(mux))
-
-	if err != nil {
-		fmt.Println(err)
+	fmt.Println("server started on", address)
+	server := &http.Server{
+		Addr:    address,
+		Handler: corsMiddlewareWithLog(mux),
 	}
+	go func() {
+		err := server.ListenAndServe()
+		if err != nil && err != http.ErrServerClosed {
+			log.Fatalf("could not listen on %s: %v\n", address, err)
+		}
+	}()
+	shutdownSignal := make(chan os.Signal, 1)
+	signal.Notify(shutdownSignal, os.Interrupt, syscall.SIGTERM)
+	<-shutdownSignal
+	fmt.Println("shutting down server...")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	err = server.Shutdown(ctx)
+	if err != nil {
+		log.Fatalf("server shutdown failed: %v\n", err)
+	}
+	fmt.Println("server stopped")
+
 }

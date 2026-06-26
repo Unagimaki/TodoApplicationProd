@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import TodoItem from './components/TodoItem';
 import './App.css';
 
@@ -7,10 +7,17 @@ function App() {
   const [isLoading, setLoading] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [error, setError] = useState('');
+  const createTodoControllerRef = useRef(null);
+  const isMountedRef = useRef(true);
   const URL = 'http://localhost:8080';
 
   useEffect(() => {
     fetchTodo();
+
+    return () => {
+      isMountedRef.current = false;
+      createTodoControllerRef.current?.abort();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -95,6 +102,9 @@ function App() {
 
     setLoading(true);
     setError('');
+    createTodoControllerRef.current?.abort();
+    const controller = new AbortController();
+    createTodoControllerRef.current = controller;
 
     try {
       const response = await fetch(`${URL}/todos`, {
@@ -103,6 +113,7 @@ function App() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ title }),
+        signal: controller.signal,
       });
 
       if (!response.ok) {
@@ -111,12 +122,24 @@ function App() {
       }
 
       const data = await response.json();
+      if (!isMountedRef.current) return;
+
       setTodos(prev => [...prev, data]);
       setNewTitle('');
     } catch (error) {
+      if (error.name === 'AbortError') {
+        return;
+      }
+
       setError(error.message);
     } finally {
-      setLoading(false);
+      if (createTodoControllerRef.current === controller) {
+        createTodoControllerRef.current = null;
+      }
+
+      if (isMountedRef.current) {
+        setLoading(false);
+      }
     }
   };
 

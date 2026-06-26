@@ -1,6 +1,7 @@
 package todo
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -16,8 +17,7 @@ func NewRepo(db *sql.DB) *Repository {
 	}
 }
 
-func (r *Repository) CreateTodo(title string) (Todo, error) {
-
+func (r *Repository) CreateTodo(ctx context.Context, title string) (Todo, error) {
 	query := `
 		INSERT INTO todos (title)
 		VALUES ($1)
@@ -26,7 +26,7 @@ func (r *Repository) CreateTodo(title string) (Todo, error) {
 
 	var todo Todo
 
-	err := r.db.QueryRow(query, title).Scan(
+	err := r.db.QueryRowContext(ctx, query, title).Scan(
 		&todo.ID,
 		&todo.Title,
 		&todo.Completed,
@@ -37,8 +37,7 @@ func (r *Repository) CreateTodo(title string) (Todo, error) {
 	return todo, nil
 
 }
-
-func (r *Repository) GetAllTodos() ([]Todo, error) {
+func (r *Repository) GetAllTodos(ctx context.Context) ([]Todo, error) {
 	todos := []Todo{}
 
 	query := `
@@ -47,7 +46,7 @@ func (r *Repository) GetAllTodos() ([]Todo, error) {
 		ORDER BY id
 	`
 
-	rows, err := r.db.Query(query)
+	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -73,13 +72,12 @@ func (r *Repository) GetAllTodos() ([]Todo, error) {
 	}
 	return todos, nil
 }
-
-func (r *Repository) DeleteTodo(id int) error {
+func (r *Repository) DeleteTodo(ctx context.Context, id int) error {
 	query := `
 		DELETE FROM todos
 		WHERE id = $1
 	`
-	result, err := r.db.Exec(query, id)
+	result, err := r.db.ExecContext(ctx, query, id)
 	if err != nil {
 		return fmt.Errorf("repository delete todo exec: %w", err)
 	}
@@ -93,8 +91,7 @@ func (r *Repository) DeleteTodo(id int) error {
 
 	return nil
 }
-
-func (r *Repository) UpdateTodoTitle(id int, title string) (Todo, error) {
+func (r *Repository) UpdateTodoTitle(ctx context.Context, id int, title string) (Todo, error) {
 	query := `
 		UPDATE todos
 		SET title = $1
@@ -104,7 +101,7 @@ func (r *Repository) UpdateTodoTitle(id int, title string) (Todo, error) {
 
 	var todo Todo
 
-	err := r.db.QueryRow(query, title, id).Scan(
+	err := r.db.QueryRowContext(ctx, query, title, id).Scan(
 		&todo.ID,
 		&todo.Title,
 		&todo.Completed,
@@ -117,7 +114,7 @@ func (r *Repository) UpdateTodoTitle(id int, title string) (Todo, error) {
 	}
 	return todo, nil
 }
-func (r *Repository) ToggleTodo(id int) (Todo, error) {
+func (r *Repository) ToggleTodo(ctx context.Context, id int) (Todo, error) {
 	query := `
 		UPDATE todos
 		SET completed = NOT completed
@@ -125,7 +122,7 @@ func (r *Repository) ToggleTodo(id int) (Todo, error) {
 		RETURNING id, title, completed
 	`
 	var todo Todo
-	err := r.db.QueryRow(query, id).Scan(
+	err := r.db.QueryRowContext(ctx, query, id).Scan(
 		&todo.ID,
 		&todo.Title,
 		&todo.Completed,
