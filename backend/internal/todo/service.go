@@ -36,7 +36,7 @@ func (s *Service) GetAllTodos() ([]Todo, error) {
 
 func (s *Service) DeleteTodo(id int) error {
 	if id <= 0 {
-		return errors.New("invalid id")
+		return ErrInvalidID
 	}
 	err := s.repo.DeleteTodo(id)
 	if err != nil {
@@ -47,10 +47,10 @@ func (s *Service) DeleteTodo(id int) error {
 
 func (s *Service) UpdateTodoTitle(id int, title string) (Todo, error) {
 	if id <= 0 {
-		return Todo{}, errors.New("invalid id")
+		return Todo{}, ErrInvalidID
 	}
 	if title == "" {
-		return Todo{}, errors.New("invalid title")
+		return Todo{}, ErrTitleRequired
 	}
 	todo, err := s.repo.UpdateTodoTitle(id, title)
 	if err != nil {
@@ -60,7 +60,7 @@ func (s *Service) UpdateTodoTitle(id int, title string) (Todo, error) {
 }
 func (s *Service) ToggleTodo(id int) (Todo, error) {
 	if id <= 0 {
-		return Todo{}, fmt.Errorf("invaild id")
+		return Todo{}, ErrInvalidID
 	}
 	todo, err := s.repo.ToggleTodo(id)
 	if err != nil {

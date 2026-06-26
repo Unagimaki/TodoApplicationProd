@@ -2,6 +2,7 @@ package todo
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 )
 
@@ -80,14 +81,14 @@ func (r *Repository) DeleteTodo(id int) error {
 	`
 	result, err := r.db.Exec(query, id)
 	if err != nil {
-		return fmt.Errorf("repository database error: %w", err)
+		return fmt.Errorf("repository delete todo exec: %w", err)
 	}
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
 		return fmt.Errorf("repository delete todo rows affected: %w", err)
 	}
 	if rowsAffected == 0 {
-		return fmt.Errorf("repository delete todo: no todo found with id %d", id)
+		return fmt.Errorf("repository delete todo id: %d: %w", id, ErrTodoNotFound)
 	}
 
 	return nil
@@ -109,6 +110,9 @@ func (r *Repository) UpdateTodoTitle(id int, title string) (Todo, error) {
 		&todo.Completed,
 	)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return Todo{}, fmt.Errorf("repository update todo title id %d: %w", id, ErrTodoNotFound)
+		}
 		return Todo{}, fmt.Errorf("repository update todo title: %w", err)
 	}
 	return todo, nil
@@ -127,6 +131,10 @@ func (r *Repository) ToggleTodo(id int) (Todo, error) {
 		&todo.Completed,
 	)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return Todo{}, fmt.Errorf("repository toggle todo id %d: %w", id, ErrTodoNotFound)
+		}
+
 		return Todo{}, fmt.Errorf("repository update todo status: %w", err)
 	}
 	return todo, nil

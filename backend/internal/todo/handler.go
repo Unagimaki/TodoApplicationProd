@@ -2,7 +2,9 @@ package todo
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 )
@@ -25,6 +27,19 @@ func NewHandler(service *Service) *Handler {
 		service: service,
 	}
 }
+func handleError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, ErrInvalidID):
+		http.Error(w, "invalid id", http.StatusBadRequest)
+	case errors.Is(err, ErrTitleRequired):
+		http.Error(w, "title is required", http.StatusBadRequest)
+	case errors.Is(err, ErrTodoNotFound):
+		http.Error(w, "todo not found", http.StatusNotFound)
+	default:
+		log.Println(err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+	}
+}
 
 func (h *Handler) CreateTodo(w http.ResponseWriter, r *http.Request) {
 	var req CreateTodoRequest
@@ -37,7 +52,7 @@ func (h *Handler) CreateTodo(w http.ResponseWriter, r *http.Request) {
 
 	todo, err := h.service.CreateTodo(req.Title)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		handleError(w, err)
 		return
 	}
 
@@ -88,7 +103,7 @@ func (h *Handler) DeleteTodo(w http.ResponseWriter, r *http.Request) {
 	}
 	err = h.service.DeleteTodo(id)
 	if err != nil {
-		http.Error(w, "something went wrong", http.StatusInternalServerError)
+		handleError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -109,11 +124,12 @@ func (h *Handler) UpdateTodoTitle(w http.ResponseWriter, r *http.Request) {
 	}
 	todo, err := h.service.UpdateTodoTitle(id, req.Title)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		handleError(w, err)
 		return
 	}
 	response, err := json.Marshal(todo)
 	if err != nil {
+		log.Println(err)
 		http.Error(w, "failed to encode response", http.StatusInternalServerError)
 		return
 	}
@@ -131,11 +147,12 @@ func (h *Handler) ToggleTodo(w http.ResponseWriter, r *http.Request) {
 	}
 	todo, err := h.service.ToggleTodo(id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		handleError(w, err)
 		return
 	}
 	response, err := json.Marshal(todo)
 	if err != nil {
+		log.Println(err)
 		http.Error(w, "failed to encode response", http.StatusInternalServerError)
 		return
 	}
